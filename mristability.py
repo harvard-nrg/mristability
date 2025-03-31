@@ -1,6 +1,7 @@
 #!/usr/bin/env -S python3 -u
 
 import re
+import os
 import sys
 import json
 import time
@@ -18,7 +19,7 @@ class StabilityCollector:
         self._verbose = verbose
         self._archive = archive
         self._archive_dir = 'Processed'
-        self._scanner_location = Path('Harvard/Northwest/Bay1')
+        self._scanner = ('Harvard', 'Northwest', 'Bay1')
         self._file_pattern = re.compile(
             r'Stability_([0-9]{4}-[0-9]{2}-[0-9]{2}'
             r'T[0-9]{2}-[0-9]{2}-[0-9]{2}).txt'
@@ -53,19 +54,16 @@ class StabilityCollector:
 
     def collect(self):
         ''' scan directory, process each file, and yield transformed data '''
-        scandir = self._base_dir / self._scanner_location
+        scandir = self._base_dir / Path(*self._scanner)
         if not self._scan_for_files(scandir):
             self._log.info(f'no new files found in {scandir}')
             return
-        for path in self._files:
+        for i,path in enumerate(self._files):
             try:
                 yield self._process_file(path)
                 self._archive_file(path)
             except Exception as e:
                 self._log.exception(e)
-
-    def _dot_location(self):
-        return str(self._scanner_location).replace('/', '.')
 
     def _scan_for_files(self, path):
         ''' scan for stability report files '''
@@ -106,24 +104,27 @@ class StabilityCollector:
                 r' 4(.*)\n 5(.*)\n 6(.*)\n 7(.*)\n 8(.*)\n 9(.*)\n10(.*)\n11(.*)\n12'
                 r'(.*)\n13(.*)\n14(.*)\n15(.*)\n16(.*)\n'
             )
-            sections = re.findall(expr, lines, re.MULTILINE)
             # parse each section
+            sections = re.findall(expr, lines, re.MULTILINE)
+            scannerstr = '.'.join(self._scanner)
             data = {
-                'scanner': self._dot_location(),
+                'scanner': scannerstr,
                 'coil': coil,
                 'filename': path.name,
                 'timestamp': epoch
             }
             for section in sections:
                 section = list(section)
-                section_type = re.sub(r'\W+', '', section.pop(0))
+                section_type = section.pop(0)
                 headers = section.pop(0).split()
+                headers = [hdr.replace('[%]', 'pct') for hdr in headers]
+                headers = [re.sub(r'\W+', '', hdr) for hdr in headers]
                 section = [block.split() for block in section]
-                data[section_type] = list()
                 for i,row in enumerate(section, start=1):
-                    floated = [float(x) for x in row] 
-                    _row = dict(zip(['slice'] + headers, [i] + floated))
-                    data[section_type].append(_row)
+                    row = map(float, row)
+                    for key,value in zip(headers, row):
+                        key = f'{scannerstr}.{coil}.{key}.{section_type}.{i}'
+                        data[key] = value
         return data
 
     def _archive_file(self, source):
@@ -159,11 +160,17 @@ class StabilityCollector:
 
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument('-b', '--base-dir', default='/ncf/dicom-backups/_Scanner')
+    parser.add_argument('-b', '--base-dir', type=Path, 
+        default=os.environ.get('BASEDIR'))
     parser.add_argument('-a', '--archive', action='store_true')
     parser.add_argument('-v', '--verbose', action='store_true')
     args = parser.parse_args()
-
+   
+    if not args.base_dir:
+        parser.print_usage()
+        print('mristability.py: error: the following arguments are required: -b/--base-dir')
+        sys.exit(1)
+        
     collector = StabilityCollector(
         base_dir=args.base_dir,
         archive=args.archive,

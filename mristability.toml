@@ -1,14 +1,16 @@
 [[inputs.exec]]
-  commands = ["./mristability.py"]
-  timeout = "10s"
-  data_format = "json"
-  json_strict = true
-  json_query = ""
-  tag_keys = [
-    "scanner",
-    "coil",
-    "filename"
-  ]
-  json_time_key = "timestamp"
-  json_time_format = "unix"
-
+    commands = ["./mristability.py --archive"]
+    environment = [
+        "BASEDIR"
+    ]
+    data_format = "json_v2"
+    [[inputs.exec.json_v2]]
+            [[inputs.exec.json_v2.object]]
+                path = "@this"
+                tags = [
+                    "scanner",
+                    "coil",
+                    "filename"
+                ]
+                timestamp_key = "timestamp"
+                timestamp_format = "unix"
