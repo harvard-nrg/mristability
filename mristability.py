@@ -123,7 +123,7 @@ class StabilityCollector:
                 for i,row in enumerate(section, start=1):
                     row = map(float, row)
                     for key,value in zip(headers, row):
-                        key = f'{scannerstr}.{coil}.{key}.{section_type}.{i}'
+                        key = f'{key}.{section_type}.{i}'
                         data[key] = value
         return data
 
