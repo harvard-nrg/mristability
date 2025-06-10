@@ -5,6 +5,7 @@ import os
 import sys
 import json
 import time
+import shutil
 import logging
 from pathlib import Path
 from argparse import ArgumentParser
@@ -14,9 +15,11 @@ class StabilityCollectorError(Exception):
     pass
 
 class StabilityCollector:
-    def __init__(self, base_dir, archive=False, verbose=False):
+    def __init__(self, base_dir, archive=False, verbose=False, chmod=None, chgrp=None):
         self._base_dir = Path(base_dir)
         self._verbose = verbose
+        self._chmod = chmod
+        self._chgrp = chgrp
         self._archive = archive
         self._archive_dir = 'Processed'
         self._scanner = ('Harvard', 'Northwest', 'Bay1')
@@ -127,14 +130,22 @@ class StabilityCollector:
                         data[key] = value
         return data
 
+    def _force_permissions(self, path):
+        if self._chmod:
+            path.chmod(self._chmod)
+        if self._chgrp:
+            shutil.chown(path, group=self._chgrp)
+
     def _archive_file(self, source):
         ''' move file into archive directory so it is not processed again '''
         archive_dir = source.parent / self._archive_dir
         archive_dir.mkdir(parents=True, exist_ok=True)
+        self._force_permissions(archive_dir)
         destination = archive_dir / source.name
         if self._archive:
             self._log.info(f'renaming {source} to {destination}')
             source.rename(destination)
+            self._force_permissions(destination)
         else:
             self._log.info(f'pass --archive to rename {source} to {destination}')
 
@@ -162,6 +173,8 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('-b', '--base-dir', type=Path, 
         default=os.environ.get('BASEDIR'))
+    parser.add_argument('--chmod', type=int, default=504)
+    parser.add_argument('--chgrp', type=str, default='mrimgmt')
     parser.add_argument('-a', '--archive', action='store_true')
     parser.add_argument('-v', '--verbose', action='store_true')
     args = parser.parse_args()
@@ -170,10 +183,12 @@ if __name__ == '__main__':
         parser.print_usage()
         print('mristability.py: error: the following arguments are required: -b/--base-dir')
         sys.exit(1)
-        
+
     collector = StabilityCollector(
         base_dir=args.base_dir,
         archive=args.archive,
+        chmod=args.chmod,
+        chgrp=args.chgrp,
         verbose=args.verbose
     )
 
