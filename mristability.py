@@ -76,9 +76,18 @@ class StabilityCollector:
                 files.append(entry)
         if files:
             self._log.debug(files)
-            self._files = files
+            self._files = list(self._sort_files(files))
             return True
         return False
+
+    def _sort_files(self, files):
+        ''' sort stability files by timestamp '''
+        dates = dict()
+        for path in files:
+            epoch = self._parse_epoch(path)
+            dates[epoch] = path
+        for _,path in sorted(dates.items()):
+            yield path
 
     def _process_file(self, path):
         ''' transform a single stability report into json '''
